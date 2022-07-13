@@ -1,0 +1,149 @@
+# load the required packages 
+library(tidyverse)
+library(ggplot2)
+
+
+#load the file
+airline<- read.csv("C:/Users/Herman/Documents/transformation/tokenization/airline.csv",header=TRUE,stringsAsFactors = FALSE)
+
+airline<- tibble(airline)
+##question 2 
+##part 1
+#descriptive analysis
+#counts
+#objective of the analysis
+#know the total counts of complaint label and usr verified
+library(janitor)
+
+#use tabyl to count
+tabyl(airline,complaint_label,usr_verified)
+#brief interpretation:
+#there are more non_complaint cases where the user is not verified compared to the complaint with users being verified
+
+#objective: Obtaining summary statistics
+library(psych)
+
+#use describeBy() to get the summary statistics
+#for the complaint_label
+describeBy(airline$usr_followers_count,group = airline$complaint_label)
+#brief interpretation:
+# the non_compliant group has a higher bumber of usr_followers_count with n=5368 thus high
+#number of mean, median and standard deviation compared to the compliant group
+
+
+#for the usr_verified
+describeBy(airline$usr_followers_count,group = airline$usr_verified)
+#brief interpretation;
+#the FALSE group is high meaning those who has a high numbersfollowers have their account not verified
+#compared to the TRUE group whose accounts are verified
+
+#select columns 
+#arrange usr_followers_count in desceding order
+#filter the rows with usr_followers_count greater than 10000 followers
+airline%>%
+  select(complaint_label,usr_followers_count,usr_verified)%>%
+  arrange(desc(usr_followers_count))%>%
+  filter(usr_followers_count>=10000)
+#brief_interpretation
+# the highest number of user is 2200851 with user being verified and complaint_;abel is non compliant
+#number of those with more than 10000 user is 299.
+
+##question 2
+##part 2
+
+#what is meant by tokenization:
+#tokenisation is  the process of breaking human-readable text into machine readable components.
+
+#store tweet_text in variable text
+text<- airline$tweet_text
+#remove url and all retweet
+
+clean_text<-gsub( "?(f|ht)tp(s?)://(.*)[.][a-z]+","",text)
+
+#store text in tibble form
+text.df<- tibble(line=1:length(clean_text),
+                 tweet_id=airline$tweet_id,
+                 text=clean_text,
+                 complaint_label=airline$complaint_label)
+
+#break the text into individual tokens ie tokenisation
+#use unnest_tokens() from tidytext package
+
+library(tidytext)
+library(tokenizers)
+
+
+tidy.text<-text.df%>%
+  unnest_tokens(word,text)%>%
+ filter(!grepl('[0-9]',word))
+#remove the stop_words with anti_join()
+data("stop_words")
+tidy.text<- tidy.text%>%
+  anti_join(stop_words)
+##question 2
+##part 3
+# find the most common words with count()
+common.word<- tidy.text%>%
+  count(word,sort=TRUE)
+print(common.word)
+#plot using ggplot()
+plot_common_word<-tidy.text%>%
+  count(word,sort=TRUE)%>%
+  mutate(word=reorder(word,n))%>%
+  filter(n>200)%>%
+  ggplot(aes(n, word,fill=word))+
+  geom_col()+
+  labs(y=NULL)
+
+print(plot_common_word)
+
+#Compare the review_words by the characteristics of the reviews.
+complaint_review<- tidy.text%>%
+  group_by(complaint_label)%>%
+  count(word,sort=TRUE)%>%
+  arrange(complaint_label)%>%
+  slice_head(n=5)%>%
+  ggplot(aes(word,n,fill=complaint_label))+
+  geom_col()+
+  facet_wrap(~complaint_label,scales="free_x")+
+  coord_flip()+
+  labs(x="words in use",
+       y="count of words")
+print(complaint_review)
+#Interpretation:
+#from the first codes a graph is plotted showing the most used words 
+#which is t.co with atleast 1250 words
+
+#for the second code it plot a graph that shows the words in each complaint label.
+#looking at the graph we see that in the non_complaint graph the most used word is
+#t.co and http while in the complaint graph these words are not used and words like
+#united and flight are the most used. Similar words used in both complaint and non-complaint 
+#are united abd flight.
+##question 2
+##part 4
+#get sentiments using get_sentiments()
+library(textdata)
+afinn<-get_sentiments("afinn")%>%
+  select(word,afinn_score=value)
+sentiment_review<-tidy.text%>%
+  inner_join(afinn,by="word")%>%
+  group_by(complaint_label,tweet_id)%>%
+  summarize(sentiment=mean(afinn_score))
+print(sentiment_review)
+
+sentiment_review_boxplot<- sentiment_review%>%
+  ggplot(aes(complaint_label,
+             sentiment,
+             group=complaint_label))+
+  geom_boxplot()+
+  labs(y="Average sentiment score",
+       x="complaint_labels")+
+  ggtitle("Comparing Sentiment by complaint_labels")
+
+print(sentiment_review_boxplot)
+
+#the lexicon used is AFINN. It is seen that the mean of sentiment scores 
+#of complaint compared to mean score of non complaint is -0.701 and 0.6380
+#respectively.This mean score is increasing as the complaint_label changes 
+#from complaint to non complaint
+
